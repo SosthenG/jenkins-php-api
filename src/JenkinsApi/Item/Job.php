@@ -11,6 +11,7 @@ use RuntimeException;
 /**
  * @package    JenkinsApi\Item
  * @author     Christopher Biel <christopher.biel@jungheinrich.de>
+ * @author     Sosthèn Gaillard <sosthen.gaillard@gmail.com>
  * @version    $Id$
  *
  * @method string getName()
@@ -19,18 +20,31 @@ use RuntimeException;
 class Job extends AbstractItem
 {
     /**
-     * @var
+     * @var string
      */
     private $_jobName;
+    /**
+     * @var Job
+     */
+    private $_parentJob;
 
     /**
-     * @param         $jobName
-     * @param Jenkins $jenkins
+     * @param string      $jobName
+     * @param Jenkins|Job $jenkins_job
      */
-    public function __construct($jobName, Jenkins $jenkins)
+    public function __construct($jobName, $jenkins_job)
     {
         $this->_jobName = $jobName;
-        $this->_jenkins = $jenkins;
+        if ($jenkins_job instanceof Jenkins) {
+            $this->_jenkins = $jenkins_job;
+        }
+        elseif ($jenkins_job instanceof Job && $jenkins_job->getParentJob() === null) {
+            $this->_jenkins = $jenkins_job->getJenkins();
+            $this->_parentJob = $jenkins_job;
+        }
+        else {
+            throw new \InvalidArgumentException("You should pass either a jenkins instance or an orphan job.");
+        }
 
         $this->refresh();
     }
@@ -49,8 +63,48 @@ class Job extends AbstractItem
      */
     protected function getUrl()
     {
-        return sprintf('job/%s/api/json', rawurlencode($this->_jobName));
+        if ($this->_parentJob === null) {
+            return sprintf('job/%s/api/json', rawurlencode($this->_jobName));
+        }
+        else {
+            return sprintf('job/%s/job/%s/api/json', rawurlencode($this->_parentJob->getName()), rawurlencode($this->_jobName));
+        }
     }
+
+
+    /**
+     * @return Job|Jenkins
+     */
+    public function getParentJob()
+    {
+        return $this->_parentJob;
+    }
+
+    /**
+     * @param string $jobName
+     *
+     * @return Job
+     */
+    public function getJob($jobName)
+    {
+        return new Job($jobName, $this);
+    }
+
+    /**
+     * @return Job[]
+     */
+    public function getJobs()
+    {
+        $data = $this->_jenkins->get($this->getUrl());
+
+        $jobs = array();
+        foreach ($data->jobs as $job) {
+            $jobs[$job->name] = $this->getJob($job->name);
+        }
+
+        return $jobs;
+    }
+
 
     /**
      * @return Build[]
