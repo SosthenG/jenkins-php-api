@@ -311,4 +311,21 @@ class Build extends AbstractItem
             $this->getBaseUrl() . '/stop'
         );
     }
+
+    /**
+     * @return array
+     */
+    public function getJunitTestResults()
+    {
+        foreach ($this->_data->actions as $action) {
+            if (!empty($action->_class) && $action->_class === 'hudson.tasks.junit.TestResultAction') {
+                return [
+                    'failed' => $action->failCount,
+                    'skipped' => $action->skipCount,
+                    'total' => $action->totalCount
+                ];
+            }
+        }
+        return [];
+    }
 }
