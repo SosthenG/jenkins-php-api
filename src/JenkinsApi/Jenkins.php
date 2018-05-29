@@ -28,6 +28,7 @@ use stdClass;
  *
  * @package    JenkinsApi
  * @author     Christopher Biel <christopher.biel@jungheinrich.de>
+ * @author     Sosthèn Gaillard <sosthen.gaillard@gmail.com>
  * @version    $Id$
  */
 class Jenkins
@@ -99,14 +100,14 @@ class Jenkins
     }
 
     /**
-     * @param string|Job $jobName
+     * @param string|Job $job
      * @param int|string $buildNumber
      *
      * @return Build
      */
-    public function getBuild($jobName, $buildNumber)
+    public function getBuild($job, $buildNumber)
     {
-        return new Build($buildNumber, $jobName, $this);
+        return new Build($buildNumber, $job, $this);
     }
 
     /**
@@ -155,7 +156,7 @@ class Jenkins
      */
     public function get($url, $depth = 1, $params = array(), array $curlOpts = [], $raw = false)
     {
-//        $url = str_replace(' ', '%20', sprintf('%s' . $url . '?depth=' . $depth, $this->_baseUrl));
+        //        $url = str_replace(' ', '%20', sprintf('%s' . $url . '?depth=' . $depth, $this->_baseUrl));
         $url = sprintf('%s', $this->_baseUrl) . $url . '?depth=' . $depth;
         if ($params) {
             foreach ($params as $key => $val) {

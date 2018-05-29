@@ -11,6 +11,7 @@ use JenkinsApi\Jenkins;
  *
  * @package    JenkinsApi\Item
  * @author     Christopher Biel <christopher.biel@jungheinrich.de>
+ * @author     Sosthèn Gaillard <sosthen.gaillard@gmail.com>
  * @version    $Id$
  *
  * @method int getNumber()
@@ -54,20 +55,26 @@ class Build extends AbstractItem
     protected $_buildNumber;
 
     /**
-     * @var string
+     * @var Job|string
      */
-    protected $_jobName;
+    protected $_job;
+
+    /**
+     * @var null|string
+     */
+    protected $_url;
 
     /**
      * @param string  $buildNumber
      * @param string  $jobName
      * @param Jenkins $jenkins
      */
-    public function __construct($buildNumber, $jobName, Jenkins $jenkins)
+    public function __construct($buildNumber, $job, Jenkins $jenkins, $url = null)
     {
         $this->_buildNumber = $buildNumber;
-        $this->_jobName = (string) $jobName;
+        $this->_job = $job;
         $this->_jenkins = $jenkins;
+        $this->_url = $url;
 
         $this->refresh();
     }
@@ -77,7 +84,7 @@ class Build extends AbstractItem
         try {
             return parent::refresh();
         } catch (JenkinsApiException $e) {
-            throw new BuildNotFoundException($this->_buildNumber, $this->_jobName, 0, $e);
+            throw new BuildNotFoundException($this->_buildNumber, (string) $this->_job, 0, $e);
         }
     }
 
@@ -86,7 +93,17 @@ class Build extends AbstractItem
      */
     protected function getUrl()
     {
-        return sprintf('job/%s/%d/api/json', rawurlencode($this->_jobName), rawurlencode($this->_buildNumber));
+        return $this->getBaseUrl() . '/api/json';
+    }
+
+    protected function getBaseUrl()
+    {
+        if ($this->_job instanceof Job) {
+            return sprintf($this->_job->getBaseUrl() . '/%d', rawurlencode($this->_buildNumber));
+        }
+        else {
+            return sprintf('job/%s/%d', rawurlencode((string) $this->_job), rawurlencode($this->_buildNumber));
+        }
     }
 
     /**
@@ -225,7 +242,7 @@ class Build extends AbstractItem
      */
     public function setDescription($text)
     {
-        $url = sprintf('job/%s/%s/submitDescription', $this->_jobName, $this->_buildNumber);
+        $url = $this->getBaseUrl() . '/submitDescription';
         return $this->getJenkins()->post($url, array('description' => $text));
     }
 
@@ -234,7 +251,7 @@ class Build extends AbstractItem
      */
     public function getConsoleTextBuild()
     {
-        return $this->getJenkins()->get(sprintf('job/%s/%s/consoleText', $this->_jobName, $this->_buildNumber), 1, array(), array(), true);
+        return $this->getJenkins()->get($this->getBaseUrl() . '/consoleText', 1, array(), array(), true);
     }
 
     /**
@@ -278,7 +295,7 @@ class Build extends AbstractItem
      */
     public function getJobName()
     {
-        return $this->_jobName;
+        return (string) $this->_job;
     }
 
     /**
@@ -291,7 +308,7 @@ class Build extends AbstractItem
         }
 
         return $this->getJenkins()->post(
-            sprintf('job/%s/%d/stop', $this->_jobName, $this->_buildNumber)
+            $this->getBaseUrl() . '/stop'
         );
     }
 }

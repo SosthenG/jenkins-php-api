@@ -38,12 +38,12 @@ class Job extends AbstractItem
         if ($jenkins_job instanceof Jenkins) {
             $this->_jenkins = $jenkins_job;
         }
-        elseif ($jenkins_job instanceof Job && $jenkins_job->getParentJob() === null) {
+        elseif ($jenkins_job instanceof Job) {
             $this->_jenkins = $jenkins_job->getJenkins();
             $this->_parentJob = $jenkins_job;
         }
         else {
-            throw new \InvalidArgumentException("You should pass either a jenkins instance or an orphan job.");
+            throw new \InvalidArgumentException("You should pass either a jenkins instance or a job.");
         }
 
         $this->refresh();
@@ -63,11 +63,31 @@ class Job extends AbstractItem
      */
     protected function getUrl()
     {
+        return $this->getBaseUrl() . '/api/json';
+    }
+
+    /**
+     * @return string
+     */
+    public function getBaseUrl()
+    {
         if ($this->_parentJob === null) {
-            return sprintf('job/%s/api/json', rawurlencode($this->_jobName));
+            return sprintf('job/%s', rawurlencode($this->_jobName));
         }
         else {
-            return sprintf('job/%s/job/%s/api/json', rawurlencode($this->_parentJob->getName()), rawurlencode($this->_jobName));
+            $endpoint = '';
+            $args = [];
+
+            $parent = $this->_parentJob;
+            while ($parent !== null) {
+                $endpoint .= '/job/%s';
+                $args[] = rawurlencode($parent->getName());
+
+                $parent = $parent->getParentJob();
+            }
+            $args = array_reverse($args);
+            $args[] = rawurlencode($this->_jobName);
+            return vsprintf($endpoint . '/job/%s', $args);
         }
     }
 
@@ -127,7 +147,7 @@ class Job extends AbstractItem
      */
     public function getBuild($buildId)
     {
-        return $this->_jenkins->getBuild($this->getName(), $buildId);
+        return $this->_jenkins->getBuild($this, $buildId);
     }
 
     /**
@@ -163,7 +183,7 @@ class Job extends AbstractItem
             return null;
         }
 
-        return $this->_jenkins->getBuild($this->getName(), $this->_data->lastSuccessfulBuild->number);
+        return $this->_jenkins->getBuild($this, $this->_data->lastSuccessfulBuild->number);
     }
 
     /**
@@ -174,7 +194,7 @@ class Job extends AbstractItem
         if (null === $this->_data->lastBuild) {
             return null;
         }
-        return $this->_jenkins->getBuild($this->getName(), $this->_data->lastBuild->number);
+        return $this->_jenkins->getBuild($this, $this->_data->lastBuild->number);
     }
 
     /**
@@ -197,9 +217,9 @@ class Job extends AbstractItem
     public function launch($parameters = array())
     {
         if (empty($parameters)) {
-            return $this->_jenkins->post(sprintf('job/%s/build', rawurlencode($this->_jobName)));
+            return $this->_jenkins->post($this->getBaseUrl() . '/build');
         } else {
-            return $this->_jenkins->post(sprintf('job/%s/buildWithParameters', rawurlencode($this->_jobName)), $parameters);
+            return $this->_jenkins->post($this->getBaseUrl() . '/buildWithParameters', $parameters);
         }
     }
 
@@ -218,13 +238,13 @@ class Job extends AbstractItem
             $response = $this->launch($parameters);
             // TODO evaluate the response correctly, to get the queued item and later the build
             if ($response) {
-//                list($header, $body) = explode("\r\n\r\n", $response, 2);
+                //                list($header, $body) = explode("\r\n\r\n", $response, 2);
             }
 
             while ((time() < $startTime + $timeoutSeconds)
-                && (($this->getLastBuild()->getNumber() == $lastNumber)
-                    || ($this->getLastBuild()->getNumber() == $lastNumber + 1
-                        && $this->getLastBuild()->isBuilding()))) {
+                   && (($this->getLastBuild()->getNumber() == $lastNumber)
+                       || ($this->getLastBuild()->getNumber() == $lastNumber + 1
+                           && $this->getLastBuild()->isBuilding()))) {
                 sleep($checkIntervalSeconds);
                 $this->refresh();
             }
@@ -239,14 +259,14 @@ class Job extends AbstractItem
 
     public function delete()
     {
-        if (!$this->getJenkins()->post(sprintf('job/%s/doDelete', $this->_jobName))) {
+        if (!$this->getJenkins()->post($this->getBaseUrl() . '/doDelete')) {
             throw new RuntimeException(sprintf('Error deleting job %s on %s', $this->_jobName, $this->getJenkins()->getBaseUrl()));
         }
     }
 
     public function getConfig()
     {
-        $config = $this->getJenkins()->get(sprintf('job/%s/config.xml', $this->_jobName));
+        $config = $this->getJenkins()->get($this->getBaseUrl() . '/config.xml');
         if ($config) {
             throw new RuntimeException(sprintf('Error during getting configuation for job %s', $this->_jobName));
         }
@@ -270,7 +290,7 @@ class Job extends AbstractItem
      */
     public function setJobConfig($configuration)
     {
-        $return = $this->getJenkins()->post(sprintf('job/%s/config.xml', $this->_jobName), $configuration, array(CURLOPT_HTTPHEADER => array('Content-Type: text/xml')));
+        $return = $this->getJenkins()->post($this->getBaseUrl() . '/config.xml', $configuration, array(CURLOPT_HTTPHEADER => array('Content-Type: text/xml')));
         if ($return != 1) {
             throw new RuntimeException(sprintf('Error during setting configuration for job %s', $this->_jobName));
         }
@@ -278,14 +298,14 @@ class Job extends AbstractItem
 
     public function disable()
     {
-        if (!$this->getJenkins()->post(sprintf('job/%s/disable', $this->_jobName))) {
+        if (!$this->getJenkins()->post($this->getBaseUrl() . '/disable')) {
             throw new RuntimeException(sprintf('Error disabling job %s on %s', $this->_jobName, $this->getJenkins()->getBaseUrl()));
         }
     }
 
     public function enable()
     {
-        if (!$this->getJenkins()->post(sprintf('job/%s/enable', $this->_jobName))) {
+        if (!$this->getJenkins()->post($this->getBaseUrl() . '/enable')) {
             throw new RuntimeException(sprintf('Error enabling job %s on %s', $this->_jobName, $this->getJenkins()->getBaseUrl()));
         }
     }
